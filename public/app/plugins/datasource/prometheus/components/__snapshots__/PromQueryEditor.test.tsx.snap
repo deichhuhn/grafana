@@ -141,6 +141,10 @@ exports[`Render PromQueryEditor with basic options should render 1`] = `
               "label": "Heatmap",
               "value": "heatmap",
             },
+            Object {
+              "label": "Counter increment",
+              "value": "counter_increment",
+            },
           ]
         }
         value={

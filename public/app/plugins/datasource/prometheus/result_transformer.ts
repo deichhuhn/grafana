@@ -27,6 +27,16 @@ export class ResultTransformer {
       seriesList.sort(sortSeriesByLabel);
       seriesList = this.transformToHistogramOverTime(seriesList);
       return seriesList;
+    } else if (prometheusResult && options.format === 'counter_increment') {
+      const seriesList: TimeSeries[] = [];
+      for (const metricData of prometheusResult) {
+        if (response.data.data.resultType === 'matrix') {
+          seriesList.push(this.transformIncreaseMetricData(metricData, options, options.start, options.end));
+        } else {
+          console.log('unknown type ' + response.data.data.resultType);
+        }
+      }
+      return seriesList;
     } else if (prometheusResult) {
       const seriesList: TimeSeries[] = [];
       for (const metricData of prometheusResult) {
@@ -57,6 +67,65 @@ export class ResultTransformer {
 
       if (_.isNaN(dpValue)) {
         dpValue = null;
+      }
+
+      const timestamp = parseFloat(value[0]) * 1000;
+      for (let t = baseTimestamp; t < timestamp; t += stepMs) {
+        dps.push([null, t]);
+      }
+      baseTimestamp = timestamp + stepMs;
+      dps.push([dpValue, timestamp]);
+    }
+
+    const endTimestamp = end * 1000;
+    for (let t = baseTimestamp; t <= endTimestamp; t += stepMs) {
+      dps.push([null, t]);
+    }
+
+    return {
+      datapoints: dps,
+      refId: options.refId,
+      target: name ?? '',
+      tags: labels,
+      title,
+      meta: options.meta,
+    };
+  }
+
+  transformIncreaseMetricData(metricData: any, options: any, start: number, end: number): TimeSeries {
+    console.log('transforming increase metric data');
+    console.log(metricData);
+    const dps = [];
+    const { name, labels, title } = this.createLabelInfo(metricData.metric, options);
+
+    const stepMs = parseFloat(options.step) * 1000;
+    let baseTimestamp = start * 1000;
+
+    if (metricData.values === undefined) {
+      throw new Error('Prometheus heatmap error: data should be a time series');
+    }
+
+    let lastValue = 0;
+    let firstValue = true;
+    for (const value of metricData.values) {
+      let dpValue: number | null = parseFloat(value[1]);
+
+      if (_.isNaN(dpValue)) {
+        dpValue = null;
+      }
+      console.log('dpValue: ' + dpValue + ' lastValue: ' + lastValue);
+      let tmpValue = 0;
+      if (dpValue == null) {
+        dpValue = 0;
+      } else {
+        tmpValue = dpValue;
+        dpValue = dpValue - lastValue;
+      }
+      lastValue = tmpValue;
+
+      if (firstValue) {
+        firstValue = false;
+        continue;
       }
 
       const timestamp = parseFloat(value[0]) * 1000;
